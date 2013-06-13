@@ -85,7 +85,7 @@ def spanChecker(data):
             out.append(span)
     return out  
 
-def masker(toBeMasked):
+def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
     for videoIn in toBeMasked:
         os.mkdir("tmp")
         word = toBeMasked[videoIn][0]
@@ -124,7 +124,7 @@ def masker(toBeMasked):
         subprocs = []
         # iterate over the masks and maskFiles starting process
         for mask, maskFile in zip(masks, maskFiles):
-            cmd = ["ffmpeg", "-f", "image2", "-loop", "1", "-r:v", "59.94", "-i", "mask.jpg", "-pix_fmt", "yuv420p", "-an", "-t", str((mask[1]-mask[0])/1000.), "-y", maskFile]
+            cmd = ["ffmpeg", "-f", "image2", "-loop", "1", "-r:v", "59.94", "-i", maskImage, "-pix_fmt", "yuv420p", "-an", "-t", str((mask[1]-mask[0])/1000.), "-y", maskFile]
             print(cmd)
             subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
         # iterate over the nonMasks and nonMaskFiles starting process
