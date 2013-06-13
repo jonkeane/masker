@@ -1,5 +1,3 @@
-
-
 from __future__ import division
 import os, subprocess, csv, shutil
 
@@ -81,8 +79,16 @@ def spanChecker(data):
     """Check to make sure the spans given are well formed"""
     out = []
     for span in data:
-        if span[1]-span[0] > 0:
-            out.append(span)
+        begin = span[0]
+        end = span[1]
+        # make sure no spans are before the beginning of the clip
+        if begin < 0:
+            begin = 0
+        if end < 0:
+            end = 0
+        # make sure that no spans are negative
+        if end-begin > 0:
+            out.append([begin, end])
     return out  
 
 def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
