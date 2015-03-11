@@ -91,9 +91,15 @@ def spanChecker(data):
             out.append([begin, end])
     return out  
 
-def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
+def noMasker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
     for videoIn in toBeMasked:
-        os.mkdir("tmp")
+        output = subprocess.check_output(["ffmpeg", "-i", "originalVideos/"+videoIn, "-q:v", "0", "-an", "-vf", "setpts=(1/0.5)*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn])#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
+
+
+def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
+    for videoIn in toBeMasked:
+        if not os.path.exists("tmp"):
+            os.makedirs("tmp")
         word = toBeMasked[videoIn][0]
         masks = toBeMasked[videoIn][1]
         
@@ -111,6 +117,7 @@ def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
         nonMasks = sorted(nonMasks)
         nonMasks = chunks(nonMasks, 2)
         nNonMasks = len(nonMasks)
+        print(nonMasks)
         
         # make mask pipes
         maskFiles = []
@@ -135,7 +142,7 @@ def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
             subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
         # iterate over the nonMasks and nonMaskFiles starting process
         for nonMask, nonMaskFile in zip(nonMasks, nonMaskFiles):
-            cmd = ["ffmpeg", "-i", videoIn, "-ss", str(nonMask[0]/1000.), "-t", str((nonMask[1]-nonMask[0])/1000.), "-qscale", "0", "-y", nonMaskFile]
+            cmd = ["ffmpeg", "-i", "originalVideos/"+videoIn, "-ss", str(nonMask[0]/1000.), "-t", str((nonMask[1]-nonMask[0])/1000.), "-q:v", "0", "-y", nonMaskFile]
             print(cmd)
             subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
             
@@ -148,10 +155,12 @@ def masker(toBeMasked, maskImage="masker/masks/black852x480.jpg"):
 
         ct = subprocess.Popen(catCmd, stdout=subprocess.PIPE)
     
-        output = subprocess.check_output(["ffmpeg", "-i", "-", "-qscale", "0", "-an", "-y", "stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
-        shutil.rmtree("tmp")
+        output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=(1/0.5)*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
+        # shutil.rmtree("tmp")
 
    
-d = readData()
+d = readData(file = "ritaApogeesCleanedOne.csv")
 trans = holdParser(d)
-masker(trans)
+# trans = transitionParser(d)
+masker(trans, outdir="test")
+# noMasker(trans, outdir="test")
