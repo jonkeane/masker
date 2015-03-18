@@ -98,8 +98,9 @@ def noMasker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
 
 def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
     for videoIn in toBeMasked:
-        if not os.path.exists("tmp"):
-            os.makedirs("tmp")
+        if os.path.exists("tmp"):
+            shutil.rmtree("tmp")
+        os.makedirs("tmp")
         word = toBeMasked[videoIn][0]
         masks = toBeMasked[videoIn][1]
         
@@ -122,14 +123,14 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
         # make mask pipes
         maskFiles = []
         for mask in range(0,nMasks):
-            file = "tmp/mask"+str(mask)+".mpg"
+            file = "tmp/mask"+str(mask)+".mpeg"
             os.mkfifo(file)
             maskFiles.append(file)
 
         # make non mask pipes
         nonMaskFiles = []
         for nonMask in range(0,nNonMasks):
-            file = "tmp/"+str(nonMask)+".mpg"
+            file = "tmp/"+str(nonMask)+".mpeg"
             os.mkfifo(file)
             nonMaskFiles.append(file)
 
@@ -155,7 +156,7 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
 
         ct = subprocess.Popen(catCmd, stdout=subprocess.PIPE)
     
-        output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=(1/0.5)*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
+        output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=2*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, 
         # shutil.rmtree("tmp")
 
    
