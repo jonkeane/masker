@@ -123,14 +123,14 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
         # make mask pipes
         maskFiles = []
         for mask in range(0,nMasks):
-            file = "tmp/mask"+str(mask)+".mpeg"
+            file = "tmp/mask"+str(mask)+".mpg"
             os.mkfifo(file)
             maskFiles.append(file)
 
         # make non mask pipes
         nonMaskFiles = []
         for nonMask in range(0,nNonMasks):
-            file = "tmp/"+str(nonMask)+".mpeg"
+            file = "tmp/"+str(nonMask)+".mpg"
             os.mkfifo(file)
             nonMaskFiles.append(file)
 
@@ -147,20 +147,49 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
             print(cmd)
             subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
             
-        catCmd = ["cat"]
+        # catCmd = ["cat"]
         # add the first (non masked) segment
-        catCmd.extend([nonMaskFiles[0]])
+        # catCmd.extend([nonMaskFiles[0]])
         # add the rest of the segments interleaved
-        catCmd.extend([y for x in zip(maskFiles,nonMaskFiles[1:]) for y in x])
-        print(catCmd)
-
-        ct = subprocess.Popen(catCmd, stdout=subprocess.PIPE)
+        # catCmd.extend([y for x in zip(maskFiles,nonMaskFiles[1:]) for y in x])
+        # print(catCmd)
+        #
+        # ct = subprocess.Popen(catCmd, stdout=subprocess.PIPE)
     
-        output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=2*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, 
-        # shutil.rmtree("tmp")
+        # output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=2*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1,
+        ffmpegCatCmd = ['ffmpeg']
+        # add the first (non masked) segment
+        ffmpegCatCmd.extend(['-i', nonMaskFiles[0]])
+        # add the rest of the segments interleaved
+        interleaved = [y for x in 
+        zip(
+        zip(['-i']*len(maskFiles), maskFiles),
+        zip(['-i']*len(nonMaskFiles), nonMaskFiles[1:])
+        ) for y in x]
+        #flatten the list of tuples
+        interleaved = [e for l in interleaved for e in l]
+        ffmpegCatCmd.extend(interleaved)
+        #count the number of inputs to get the number of videos being concated
+        numVids = sum([x == '-i' for x in ffmpegCatCmd])
+        
+        streams = ''
+        for n in range(0,numVids):
+            streams += '['+str(n)+':0] '
+        
+        filters = streams+'concat=n='+str(numVids)+':v=1, setpts=2*PTS [v]'
+        ffmpegCatCmd.extend(['-filter_complex', filters, '-map', "[v]", '-q:v', '0', '-an', '-r', '29.97', '-y', outdir+'/'+'stim'+videoIn])
+        
+        print(ffmpegCatCmd)
+        output = subprocess.check_output(ffmpegCatCmd, universal_newlines=True)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, 
+
+        # works
+        # output = subprocess.check_output(' '.join(ffmpegCatCmd), shell=True)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1,
+
+        
+        shutil.rmtree("tmp")
 
    
-d = readData(file = "ritaApogeesCleanedOne.csv")
+d = readData(file = "ritaApogeesCleanedAgain.csv")
 trans = holdParser(d)
 # trans = transitionParser(d)
 masker(trans, outdir="test")
