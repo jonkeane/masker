@@ -54,14 +54,14 @@ def holdParser(data):
         dataOut[instance] = ((wordBegin, wordEnd) ,holds)
     return dataOut
 
-def timeSpanFrameChanger(data, frames=1, shrink=False, fps=6000/1001.):
+def timeSpanFrameChanger(data, frames=1, shrink=False, fps=60000/1001.):
     """take a list of two, and adjusts the times by adding or subtracting frames on either side."""
     sign = frames
     if shrink == True:
         sign = sign*-1
     out = []
-    out.append(int(round(data[0] - sign*fps)))
-    out.append(int(round(data[1] + sign*fps)))
+    out.append(int(round(data[0] - sign*(1/fps)*1000)))
+    out.append(int(round(data[1] + sign*(1/fps)*1000)))
     return out
 
 def timeSpanPercentageChanger(data, perc=0.5, shrink=True, fps=6000/1001.):
@@ -119,6 +119,8 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
         nonMasks = chunks(nonMasks, 2)
         nNonMasks = len(nonMasks)
         print(nonMasks)
+        
+        # remove the last nonMask, if it is less than a frame:
         
         # make mask pipes
         maskFiles = []
@@ -189,8 +191,8 @@ def masker(toBeMasked, outdir, maskImage="masker/masks/black852x480.jpg"):
         shutil.rmtree("tmp")
 
    
-d = readData(file = "ritaApogeesCleanedAgain.csv")
+d = readData(file = "ritaApogeesCleaned.csv")
 trans = holdParser(d)
 # trans = transitionParser(d)
-masker(trans, outdir="test")
-# noMasker(trans, outdir="test")
+masker(trans, outdir="greenHoldsOnly", maskImage="masker/masks/green852x480.jpg")
+noMasker(trans, outdir="nomask")
