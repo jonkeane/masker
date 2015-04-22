@@ -233,7 +233,7 @@ def processor(dataIn, outdir, maskImage="masker/masks/green852x480.jpg"):
         basename = videoIn
         media = [clearfile, holdsMaskedfile, transMaskedfile]
 
-        allTiers = pyelan.tierSet(media=media, linkedFiles=[None], tiers=[pyelan.tier("default", [pyelan.annotation(begin=1, end=2, value="foo")])])
+        allTiers = pyelan.tierSet(media=media, tiers=[pyelan.tier("default", [pyelan.annotation(begin=1, end=2, value="foo")])])
 
         elanOut = os.path.join(saveDir,'.'.join([basename,"eaf"]))
 
