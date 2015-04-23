@@ -1,5 +1,5 @@
 from __future__ import division
-import os, subprocess, csv, shutil, re
+import os, subprocess, csv, shutil, re, time
 import pyelan.pyelan as pyelan
 
 def readData(file="RobinTest.csv"):
@@ -93,7 +93,7 @@ def spanChecker(data):
     return out
 
 def noMasker(videoIn, outpath, slowDown=2,  maskImage="masker/masks/black852x480.jpg"):
-    output = subprocess.check_output(["ffmpeg", "-i", "originalVideos/"+videoIn, "-q:v", "0", "-an", "-vf", "setpts="+str(slowDown)+"*PTS", "-r", "29.97", "-y", outpath])#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
+    output = subprocess.check_output(["ffmpeg", "-i", "originalVideos/"+videoIn, "-crf", "18", "-an", "-vf", "setpts="+str(slowDown)+"*PTS", "-r", "29.97", "-y", outpath])#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True)
 
 
 def masker(videoIn, wordDur, masks, outpath, slowDown=2, maskImage="masker/masks/black852x480.jpg"):
@@ -124,15 +124,15 @@ def masker(videoIn, wordDur, masks, outpath, slowDown=2, maskImage="masker/masks
     # make mask pipes
     maskFiles = []
     for mask in range(0,len(masks)):
-        file = "tmp/mask"+str(mask)+".mpg"
-        os.mkfifo(file)
+        file = "tmp/mask"+str(mask)+".mp4"
+        # os.mkfifo(file)
         maskFiles.append(file)
 
     # make non mask pipes
     nonMaskFiles = []
     for nonMask in range(0,len(nonMasks)):
-        file = "tmp/"+str(nonMask)+".mpg"
-        os.mkfifo(file)
+        file = "tmp/"+str(nonMask)+".mp4"
+        # os.mkfifo(file)
         nonMaskFiles.append(file)
 
 
@@ -144,23 +144,21 @@ def masker(videoIn, wordDur, masks, outpath, slowDown=2, maskImage="masker/masks
         subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
     # iterate over the nonMasks and nonMaskFiles starting process
     for nonMask, nonMaskFile in zip(nonMasks, nonMaskFiles):
-        cmd = ["ffmpeg", "-i", "originalVideos/"+videoIn, "-ss", str(nonMask[0]/1000.), "-t", str((nonMask[1]-nonMask[0])/1000.), "-q:v", "0", "-y", nonMaskFile]
+        cmd = ["ffmpeg", "-i", "originalVideos/"+videoIn, "-ss", str(nonMask[0]/1000.), "-t", str((nonMask[1]-nonMask[0]-1)/1000.), "-crf", "1", "-y", nonMaskFile]
         print(cmd)
         subprocs.append(subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1, universal_newlines=True))
 
-    # catCmd = ["cat"]
-    # add the first (non masked) segment
-    # catCmd.extend([nonMaskFiles[0]])
-    # add the rest of the segments interleaved
-    # catCmd.extend([y for x in zip(maskFiles,nonMaskFiles[1:]) for y in x])
-    # print(catCmd)
-    #
-    # ct = subprocess.Popen(catCmd, stdout=subprocess.PIPE)
+    print([process for process in subprocs])
 
-    # output = subprocess.check_output(["ffmpeg", "-i", "-", "-q:v", "0", "-an", "-vf", "setpts=2*PTS", "-r", "29.97", "-y", outdir+"/"+"stim"+videoIn], stdin = ct.stdout)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1,
+    while(any([process.returncode == None for process in subprocs])):
+        print([process.communicate() for process in subprocs])
+        print([process.returncode for process in subprocs])
+        time.sleep(1)
+
     ffmpegCatCmd = ['ffmpeg']
     # add the first (non masked) segment
     ffmpegCatCmd.extend(['-i', nonMaskFiles[0]])
+
     # add the rest of the segments interleaved
     interleaved = [y for x in
     zip(
@@ -178,16 +176,136 @@ def masker(videoIn, wordDur, masks, outpath, slowDown=2, maskImage="masker/masks
         streams += '['+str(n)+':0] '
 
     filters = streams+'concat=n='+str(numVids)+':v=1, setpts=+'+str(slowDown)+'*PTS [v]'
-    ffmpegCatCmd.extend(['-filter_complex', filters, '-map', "[v]", '-q:v', '0', '-an', '-r', '29.97', '-y', outpath])
+    ffmpegCatCmd.extend(['-filter_complex', filters, '-map', "[v]", '-crf', '18 ', '-an', '-r', '29.97', '-y', outpath])
 
     print(ffmpegCatCmd)
-    output = subprocess.check_output(ffmpegCatCmd, universal_newlines=True)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1,
+    output = subprocess.check_output(ffmpegCatCmd, universal_newlines=True)
 
-    # works
-    # output = subprocess.check_output(' '.join(ffmpegCatCmd), shell=True)#,  stderr=subprocess.STDOUT, stdout = subprocess.PIPE, bufsize=1,
+    # shutil.rmtree("tmp")
+
+    return masks
 
 
-    shutil.rmtree("tmp")
+
+def imgSplicer(videoIn, wordDur, masks, outpath, slowDown=2, fpsin=59.94, maskImage="masker/masks/black852x480.jpg"):
+    if masks != None:
+        ### If there are mask durations to mask
+        # change the spans
+        print(masks)
+        # masks = [timeSpanPercentageChanger(x, perc=0.75, shrink=True) for x in masks]
+        masks = [timeSpanFrameChanger(x, frames=0, shrink=True) for x in masks]
+        masks = spanChecker(masks)
+        print(masks)
+        # flatten the masks list
+        nonMasks = [item for sublist in masks for item in sublist]
+        nonMasks.append(0)
+        nonMasks.append(wordDur[1]-wordDur[0])
+        nonMasks = sorted(nonMasks)
+        nonMasks = chunks(nonMasks, 2)
+        print(nonMasks)
+
+        mspf = (1/fpsin)*1000
+
+        #number of places in image files
+        digits = 5
+
+        imagePrefix = "tmp/image-"
+        imageSuffix = ".png"
+
+        nonMaskList = []
+        for begin, end in nonMasks:
+            begin = begin/mspf
+            end = end/mspf
+
+            print(begin,end)
+
+            beginFrame = int(round(begin))
+            endFrame = int(round(end))
+
+            print(beginFrame,endFrame)
+
+            #generate file names, add one to both to move from 0 indexed to 1 indexed. Add an additional one to the end frame to make it inclusive of the ending frame This needs to be checked against elan files
+            nonMaskList.append([imagePrefix+str(n).zfill(digits)+imageSuffix for n in range(beginFrame+1, endFrame+1, 1)])
+
+        # remove the last frame of the list because it doesn't exist in the video.
+        # imageList[-1].pop()
+
+        imageList = [nonMaskList.pop(0)]
+        for begin, end in masks:
+            begin = begin/mspf
+            end = end/mspf
+            print(begin, end)
+
+            beginFrame = int(round(begin))
+            endFrame = int(round(end))
+
+            print(beginFrame,endFrame)
+
+            # for testing gives all of the frames
+            # newimageList.append([imagePrefix+str(n).zfill(digits)+imageSuffix for n in range(beginFrame+1, endFrame+1, 1)])
+            imageList.append([maskImage]*(endFrame-beginFrame))
+            imageList.append(nonMaskList.pop(0))
+        # flatten image list
+        imageList = [item for sublist in imageList for item in sublist]
+
+    elif masks == None:
+        mspf = (1/fpsin)*1000
+
+        #number of places in image files
+        digits = 5
+
+        imagePrefix = "tmp/image-"
+        imageSuffix = ".png"
+
+
+        begin = 0/mspf
+        end = (wordDur[1]-wordDur[0])/mspf
+
+        print(begin,end)
+
+        beginFrame = int(round(begin))
+        endFrame = int(round(end))
+
+        print(beginFrame,endFrame)
+
+        #generate file names, add one to both to move from 0 indexed to 1 indexed. Add an additional one to the end frame to make it inclusive of the ending frame This needs to be checked against elan files
+        imageList = [imagePrefix+str(n).zfill(digits)+imageSuffix for n in range(beginFrame+1, endFrame+1, 1)]
+
+        print(imageList)
+
+        # remove the last frame of the list because it doesn't exist in the video.
+        # imageList[-1].pop()
+
+
+    n=1
+    linkList = []
+    for file in imageList:
+        symLink = ''.join(["tmp/frame_",str(n).zfill(digits), ".png"])
+        os.symlink(os.path.join("..", file), symLink)
+        linkList.append(symLink)
+        n += 1
+
+    print(linkList)
+
+    ffmpegCatCmd = ['ffmpeg']
+
+    fpsout = {2: 29.97,
+              1: 59.94}
+
+    ffmpegCatCmd.extend(['-r', str(fpsout[slowDown]), '-i', './tmp/frame_%05d.png'])
+
+    ffmpegCatCmd.extend(['-pix_fmt', 'yuv420p', '-y', outpath])
+
+    print(ffmpegCatCmd)
+    output = subprocess.check_output(ffmpegCatCmd, universal_newlines=True)
+
+    # remove the link files
+    [os.remove(file) for file in linkList]
+
+    return masks
+
+
+
 
 
 def parser(data):
@@ -214,26 +332,50 @@ def parser(data):
     return dataOut
 
 
-def processor(dataIn, outdir, maskImage="masker/masks/green852x480.jpg"):
+def processor(dataIn, outdir, slowDown=2, maskImage="masker/masks/green852x480.jpg"):
     for videoIn in dataIn:
         print(videoIn)
         print(dataIn[videoIn])
 
-        holdsMaskedfile = os.path.join(outdir,'transOnly','stim'+videoIn)
-        masker(videoIn, wordDur=dataIn[videoIn][0], masks=dataIn[videoIn][3], outpath=holdsMaskedfile, slowDown=2, maskImage=maskImage)
+        fps = 59.94
+
+        # setup temp directories
+        if os.path.exists("tmp"):
+            shutil.rmtree("tmp")
+        os.makedirs("tmp")
+        #
+        # extract frames of the video.
+        # ffmpeg -i originalVideos/730.mp4 -q:v 1 -r 59.94 -f image2 testImg/image-%5d.png png is much bigger, but seems to be more faithful.
+        output = subprocess.check_output(["ffmpeg", "-i", "originalVideos/"+videoIn, "-q:v", "1", "-r", str(fps), "-f", "image2", "-y", "tmp/image-%5d.png"])
 
         transMaskedfile = os.path.join(outdir,'holdsOnly','stim'+videoIn)
-        masker(videoIn, wordDur=dataIn[videoIn][0], masks=dataIn[videoIn][3], outpath=transMaskedfile, slowDown=2, maskImage=maskImage)
+        transMasked = imgSplicer(videoIn, wordDur=dataIn[videoIn][0], masks=dataIn[videoIn][3], outpath=transMaskedfile, slowDown=slowDown, fpsin=fps, maskImage=maskImage)
+
+        holdsMaskedfile = os.path.join(outdir,'transOnly','stim'+videoIn)
+        holdsMasked = imgSplicer(videoIn, wordDur=dataIn[videoIn][0], masks=dataIn[videoIn][2], outpath=holdsMaskedfile, slowDown=slowDown, maskImage=maskImage)
 
         clearfile = os.path.join(outdir,'allClear','stim'+videoIn)
-        noMasker(videoIn, outpath=clearfile, slowDown=2, maskImage=maskImage)
+        imgSplicer(videoIn, wordDur=dataIn[videoIn][0], masks=None, outpath=clearfile, slowDown=slowDown, maskImage=maskImage)
 
 
         saveDir = os.path.join(outdir, "elanFiles")
-        basename = videoIn
+        basename = os.path.splitext(videoIn)[0]
         media = [clearfile, holdsMaskedfile, transMaskedfile]
 
-        allTiers = pyelan.tierSet(media=media, tiers=[pyelan.tier("default", [pyelan.annotation(begin=1, end=2, value="foo")])])
+
+        holdMasksTier = pyelan.tier("hold masks", [pyelan.annotation(begin=beg*slowDown, end=end*slowDown, value="") for beg, end in holdsMasked] )
+        transMasksTier = pyelan.tier("trans masks", [pyelan.annotation(begin=beg*slowDown, end=end*slowDown, value="") for beg, end in transMasked])
+
+        holdsAnnos = [pyelan.annotation(begin=beg*slowDown, end=end*slowDown, value="") for beg, end in dataIn[videoIn][2]]
+
+        for n in range(0, len(holdsAnnos)):
+            holdsAnnos[n].value = dataIn[videoIn][1][n]
+
+        holdsTier = pyelan.tier("holds", holdsAnnos)
+
+        tiers = [holdsTier, holdMasksTier, transMasksTier]
+
+        allTiers = pyelan.tierSet(media=media, tiers=tiers)
 
         elanOut = os.path.join(saveDir,'.'.join([basename,"eaf"]))
 
@@ -241,6 +383,7 @@ def processor(dataIn, outdir, maskImage="masker/masks/green852x480.jpg"):
 
         out.write(elanOut)
 
+        shutil.rmtree("tmp")
 
 
 
@@ -256,5 +399,5 @@ d = readData(file = "ritaApogeesCleaned.csv")
 # noMasker(trans, outdir="green0/nomask")
 
 words = parser(d)
-
-processor({"730.mp4": words["730.mp4"]}, outdir="test", maskImage="masker/masks/green852x480.jpg")
+# {"730.mp4": words["730.mp4"]}
+processor(words, outdir="test", slowDown=2, maskImage="masker/masks/green852x480.png")
