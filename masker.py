@@ -317,6 +317,8 @@ d = readData(file = "ritaAndRobinApogeesCleaned.csv")
 
 words = parser(d, fps=30000/1001., minFrames = 1, beforeAfter = [1000,250])
 # {"730.mp4": words["730.mp4"]}
-processor(words, outdir="greenRegular", slowDown=1, maskImage="masker/masks/green852x480.png")
+# processor(words, outdir="greenRegular", slowDown=1, maskImage="masker/masks/green852x480.png")
 
-# processor(words, outdir="grayRegular", slowDown=1, maskImage="masker/masks/50gray852x480.png")
+processor(words, outdir="blackRegular", slowDown=1, maskImage="masker/masks/black852x480.png")
+
+processor(words, outdir="grayRegular", slowDown=1, maskImage="masker/masks/50gray852x480.png")
